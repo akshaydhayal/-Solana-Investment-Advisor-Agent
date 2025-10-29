@@ -18,7 +18,7 @@ from uagents_core.contrib.protocols.chat import (
 AGENTVERSE_URL = os.getenv("AGENTVERSE_URL", "https://agentverse.ai")
 STORAGE_URL = f"{AGENTVERSE_URL}/v1/storage"
 ASI_ONE_API_KEY = os.getenv("ASI_ONE_API_KEY")
-ZERION_API_KEY = os.getenv("ZERION_API_KEY")
+ZERION_API_KEY = os.getenv("ZERION_API_KEY", "emtfZGV2X2IyNmFmZjFlMDY2ZjQ4NWNhMzdhZTI0MzVkMzI4NWY3Og==")
 
 # Initialize agent
 agent = Agent()
@@ -140,6 +140,117 @@ class SolanaWalletAnalyzer:
         except Exception as e:
             print(f"Zerion API failed: {str(e)}")
             return {"error": f"Failed to fetch Zerion data: {str(e)}"}
+    
+    async def get_zerion_positions(self, wallet_address: str) -> List[Dict[str, Any]]:
+        """Fetch detailed token positions with USD values from Zerion API"""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                url = f"https://api.zerion.io/v1/wallets/{wallet_address}/positions/?filter[positions]=only_simple&currency=usd&filter[chain_ids]=solana&filter[trash]=only_non_trash&sort=value"
+                headers = {
+                    "accept": "application/json",
+                    "authorization": f"Basic {self.zerion_api_key}"
+                }
+                
+                response = await client.get(url, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    positions = []
+                    
+                    # Check if data has the expected structure
+                    data_list = data.get("data", [])
+                    if not isinstance(data_list, list):
+                        return []
+                    
+                    for item in data_list:
+                        if not isinstance(item, dict):
+                            continue
+                            
+                        attributes = item.get("attributes", {})
+                        if not attributes:
+                            continue
+                            
+                        fungible_info = attributes.get("fungible_info", {})
+                        quantity = attributes.get("quantity", {})
+                        
+                        # Skip if essential data is missing
+                        if not fungible_info or not quantity:
+                            continue
+                        
+                        # Find Solana address from implementations
+                        solana_address = None
+                        implementations = fungible_info.get("implementations", [])
+                        for impl in implementations:
+                            if isinstance(impl, dict) and impl.get("chain_id") == "solana":
+                                solana_address = impl.get("address")
+                                break
+                        
+                        # Extract quantity value
+                        quantity_float = 0
+                        if isinstance(quantity, dict):
+                            quantity_float = quantity.get("float", quantity.get("numeric", 0))
+                            if isinstance(quantity_float, str):
+                                try:
+                                    quantity_float = float(quantity_float)
+                                except:
+                                    quantity_float = 0
+                        elif isinstance(quantity, (int, float)):
+                            quantity_float = float(quantity)
+                        
+                        # Extract value_usd
+                        value_usd = attributes.get("value")
+                        if value_usd is not None and isinstance(value_usd, str):
+                            try:
+                                value_usd = float(value_usd)
+                            except:
+                                value_usd = None
+                        
+                        # Extract price
+                        price_usd = attributes.get("price", 0)
+                        if isinstance(price_usd, str):
+                            try:
+                                price_usd = float(price_usd)
+                            except:
+                                price_usd = 0
+                        
+                        # Get changes
+                        changes = attributes.get("changes", {})
+                        changes_1d_usd = 0
+                        changes_1d_percent = 0
+                        if isinstance(changes, dict):
+                            changes_1d_usd = changes.get("absolute_1d", 0)
+                            changes_1d_percent = changes.get("percent_1d", 0)
+                        
+                        # Get flags
+                        flags = fungible_info.get("flags", {})
+                        verified = False
+                        if isinstance(flags, dict):
+                            verified = flags.get("verified", False)
+                        
+                        position_data = {
+                            "name": fungible_info.get("name", "Unknown"),
+                            "symbol": fungible_info.get("symbol", "UNK"),
+                            "address": solana_address or (item.get("id", "") or "").split("-")[0] if item.get("id") else "",
+                            "quantity": quantity_float,
+                            "value_usd": value_usd,
+                            "price_usd": price_usd if price_usd else 0,
+                            "changes_1d_usd": changes_1d_usd if isinstance(changes_1d_usd, (int, float)) else 0,
+                            "changes_1d_percent": changes_1d_percent if isinstance(changes_1d_percent, (int, float)) else 0,
+                            "verified": verified
+                        }
+                        
+                        # Only add positions with valid data (must have quantity > 0 OR valid name)
+                        if position_data["quantity"] > 0:
+                            positions.append(position_data)
+                    
+                    return positions
+                else:
+                    # Log error but don't use print - errors will be handled by caller
+                    return []
+                    
+        except Exception as e:
+            # Silently fail - will fallback to basic token data
+            return []
     
     async def get_token_prices(self, token_mints: List[str]) -> Dict[str, float]:
         """Fetch current token prices"""
@@ -505,7 +616,7 @@ def _text(msg: str) -> ChatMessage:
         content=[TextContent(type="text", text=msg)]
     )
 
-def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any] = None) -> str:
+def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any] = None, zerion_positions: List[Dict[str, Any]] = None) -> str:
     """Format wallet statistics for display"""
     sol_balance = wallet_data.get("sol_balance", 0)
     token_accounts = wallet_data.get("token_accounts", [])
@@ -515,17 +626,16 @@ def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any
     
     # Basic blockchain data
     formatted += f"**SOL Balance:** {sol_balance:.4f} SOL\n"
-    formatted += f"**Token Holdings:** {len(token_accounts)} tokens\n"
-    formatted += f"**Data Source:** {source}\n\n"
+    formatted += f"**Token Holdings:** {len(token_accounts)} tokens\n\n"
     
-    # Enhanced Zerion data if available
+    # Enhanced portfolio data if available
     if zerion_data and "error" not in zerion_data:
         total_value = zerion_data.get("total_value_usd", 0)
         daily_change_usd = zerion_data.get("daily_change_usd", 0)
         daily_change_percent = zerion_data.get("daily_change_percent", 0)
         distribution = zerion_data.get("distribution_by_type", {})
         
-        formatted += "### 💰 Portfolio Value (Zerion Data)\n\n"
+        formatted += "### 💰 Portfolio Value\n\n"
         formatted += f"**Total Portfolio Value:** ${total_value:,.2f}\n"
         
         if daily_change_usd != 0:
@@ -542,8 +652,53 @@ def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any
         
         formatted += "\n"
     
-    if token_accounts:
+    # Token holdings with USD values from Zerion positions
+    if zerion_positions and len(zerion_positions) > 0:
         formatted += "### 🪙 Token Holdings\n\n"
+        for i, position in enumerate(zerion_positions[:15], 1):  # Show top 15 tokens by value
+            name = position.get("name", "Unknown")
+            symbol = position.get("symbol", "UNK")
+            quantity = position.get("quantity", 0)
+            value_usd = position.get("value_usd")
+            price_usd = position.get("price_usd", 0)
+            changes_1d_percent = position.get("changes_1d_percent", 0)
+            verified = position.get("verified", False)
+            address = position.get("address", "")
+            
+            verified_badge = " ✓" if verified else ""
+            
+            # Format quantity nicely
+            if quantity >= 1000000:
+                quantity_str = f"{quantity/1000000:.2f}M"
+            elif quantity >= 1000:
+                quantity_str = f"{quantity/1000:.2f}K"
+            else:
+                quantity_str = f"{quantity:,.6f}".rstrip('0').rstrip('.')
+            
+            # Beautiful format: "You own X quantity of Token A which is worth $Y"
+            if value_usd is not None and value_usd > 0:
+                formatted += f"**{i}. {symbol}**{verified_badge} - {name}\n"
+                formatted += f"   💰 You own **{quantity_str} {symbol}** which is worth **${value_usd:,.2f}**\n"
+                formatted += f"   📊 Price per token: ${price_usd:,.6f}\n"
+                
+                if changes_1d_percent != 0:
+                    change_emoji = "📈" if changes_1d_percent > 0 else "📉"
+                    formatted += f"   {change_emoji} 24h change: {changes_1d_percent:+.2f}%\n"
+                
+                formatted += "\n"
+            else:
+                # If no USD value, still show quantity
+                formatted += f"**{i}. {symbol}**{verified_badge} - {name}\n"
+                formatted += f"   💰 You own **{quantity_str} {symbol}**\n"
+                formatted += f"   ⚠️ Value: Unavailable\n"
+                
+                if address and len(address) > 8:
+                    formatted += f"   🔗 Address: `{address[:8]}...{address[-8:]}`\n"
+                
+                formatted += "\n"
+    elif token_accounts:
+        formatted += "### 🪙 Token Holdings\n\n"
+        formatted += "⚠️ *Showing basic token data. Price information unavailable.*\n\n"
         for i, token_account in enumerate(token_accounts[:10], 1):  # Show first 10 tokens
             try:
                 parsed_data = token_account.get("account", {}).get("data", {}).get("parsed", {})
@@ -552,14 +707,21 @@ def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any
                 
                 mint = info.get("mint", "Unknown")
                 amount = float(token_amount.get("uiAmount", 0))
-                decimals = token_amount.get("decimals", 0)
                 symbol = mint[:8] + "..." if len(mint) > 8 else mint
                 
-                formatted += f"{i}. **{symbol}**\n"
-                formatted += f"   - Amount: {amount:,.6f}\n"
-                formatted += f"   - Mint: `{mint[:8]}...{mint[-8:]}`\n\n"
+                # Format quantity nicely
+                if amount >= 1000000:
+                    quantity_str = f"{amount/1000000:.2f}M"
+                elif amount >= 1000:
+                    quantity_str = f"{amount/1000:.2f}K"
+                else:
+                    quantity_str = f"{amount:,.6f}".rstrip('0').rstrip('.')
+                
+                formatted += f"**{i}. {symbol}**\n"
+                formatted += f"   💰 You own **{quantity_str} {symbol}**\n"
+                formatted += f"   🔗 Mint: `{mint[:8]}...{mint[-8:]}`\n\n"
             except Exception as e:
-                formatted += f"{i}. **Token {i}** (Error parsing data)\n\n"
+                formatted += f"**{i}. Token {i}** (Error parsing data)\n\n"
     else:
         formatted += "### 🪙 Token Holdings\n\n"
         formatted += "No token holdings found or token data unavailable.\n\n"
@@ -576,12 +738,16 @@ def _format_recommendations(recommendations: List[Dict[str, Any]]) -> str:
     for i, rec in enumerate(recommendations, 1):
         priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(rec.get("priority", "medium"), "🟡")
         
-        formatted += f"### {priority_emoji} {i}. {rec.get('action', 'Unknown Action')}\n"
-        formatted += f"**Description:** {rec.get('description', 'No description')}\n"
-        formatted += f"**Reasoning:** {rec.get('reasoning', 'No reasoning provided')}\n"
+        action = rec.get('action', 'Unknown Action')
+        description = rec.get('description', 'No description')
+        reasoning = rec.get('reasoning', 'No reasoning provided')
+        
+        formatted += f"{priority_emoji} **{i}. {action}**\n\n"
+        formatted += f"**Description:** {description}\n\n"
+        formatted += f"**Reasoning:** {reasoning}\n"
         
         if rec.get("estimated_annual_return"):
-            formatted += f"**Estimated Annual Return:** {rec['estimated_annual_return']}\n"
+            formatted += f"\n**Estimated Annual Return:** {rec['estimated_annual_return']}\n"
         
         formatted += "\n"
     
@@ -638,40 +804,47 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                     # Get recommendations
                     recommendations = await analyzer.generate_recommendations(wallet_address)
                     
-            if recommendations and not any(rec.get("type") == "error" for rec in recommendations):
-                response_text = f"**Wallet Analysis Complete!**\n\n"
-                response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
-                
-                # Get wallet data and Zerion data for statistics
-                wallet_data = await analyzer.get_wallet_balance(wallet_address)
-                zerion_data = await analyzer.get_zerion_portfolio(wallet_address)
-                
-                if "error" not in wallet_data:
-                    response_text += _format_wallet_stats(wallet_data, zerion_data)
-                
-                response_text += _format_recommendations(recommendations)
-                
-                await ctx.send(sender, _text(response_text))
+                    # Get wallet data, Zerion portfolio, and Zerion positions for statistics
+                    wallet_data = await analyzer.get_wallet_balance(wallet_address)
+                    zerion_data = await analyzer.get_zerion_portfolio(wallet_address)
+                    zerion_positions = await analyzer.get_zerion_positions(wallet_address)
+                    
+                    # Debug logging
+                    ctx.logger.info(f"Zerion positions fetched: {len(zerion_positions) if zerion_positions else 0} positions")
+                    if zerion_positions and len(zerion_positions) > 0:
+                        ctx.logger.info(f"First position: {zerion_positions[0].get('symbol', 'Unknown')} - ${zerion_positions[0].get('value_usd', 0)}")
+                    else:
+                        ctx.logger.warning("Zerion positions is empty or None - will fallback to basic token data")
+                    
+                    if recommendations and not any(rec.get("type") == "error" for rec in recommendations):
+                        response_text = f"**Wallet Analysis Complete!**\n\n"
+                        response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
+                        
+                        if "error" not in wallet_data:
+                            response_text += _format_wallet_stats(wallet_data, zerion_data, zerion_positions)
+                        
+                        response_text += _format_recommendations(recommendations)
+                        
+                        await ctx.send(sender, _text(response_text))
+                    else:
+                        error_msg = recommendations[0].get("message", "Analysis failed") if recommendations else "No recommendations available"
+                        await ctx.send(sender, _text(f"❌ **Analysis Failed**\n\n{error_msg}"))
+                else:
+                    await ctx.send(sender, _text(
+                        f"❌ **Invalid Wallet Address**\n\n"
+                        f"The address you provided doesn't appear to be a valid Solana wallet address.\n\n"
+                        f"Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
+                        f"**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
+                    ))
             else:
-                error_msg = recommendations[0].get("message", "Analysis failed") if recommendations else "No recommendations available"
-                await ctx.send(sender, _text(f"❌ **Analysis Failed**\n\n{error_msg}"))
-        else:
-            await ctx.send(sender, _text(
-                f"❌ **Invalid Wallet Address**\n\n"
-                f"The address you provided doesn't appear to be a valid Solana wallet address.\n\n"
-                f"Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
-                f"**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
-            ))
-    else:
-        await ctx.send(sender, _text(
-            "🤔 I need a Solana wallet address to analyze your portfolio.\n\n"
-            "Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
-            "You can find your wallet address in:\n"
-            "• Phantom wallet\n"
-            "• Solflare wallet\n"
-            "• Any other Solana wallet\n\n"
-            "**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
-        ))
+                await ctx.send(sender, _text(
+                    "🤔 I need a Solana wallet address to analyze your portfolio.\n\n"
+                    "Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
+                    "You can find your wallet address in:\n"
+                    "• Phantom wallet\n"
+                    "• Solflare wallet\n"
+                    "• Any other Solana wallet"
+                ))
 
 @chat_proto.on_message(ChatAcknowledgement)
 async def on_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
