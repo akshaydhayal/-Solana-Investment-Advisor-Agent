@@ -18,6 +18,7 @@ from uagents_core.contrib.protocols.chat import (
 AGENTVERSE_URL = os.getenv("AGENTVERSE_URL", "https://agentverse.ai")
 STORAGE_URL = f"{AGENTVERSE_URL}/v1/storage"
 ASI_ONE_API_KEY = os.getenv("ASI_ONE_API_KEY")
+ZERION_API_KEY = os.getenv("ZERION_API_KEY")
 
 # Initialize agent
 agent = Agent()
@@ -35,6 +36,7 @@ class SolanaWalletAnalyzer:
     
     def __init__(self):
         self.asi_api_key = ASI_ONE_API_KEY
+        self.zerion_api_key = ZERION_API_KEY
         self.rpc_urls = SOLANA_RPC_URLS
     
     async def get_wallet_balance(self, wallet_address: str) -> Dict[str, Any]:
@@ -106,6 +108,38 @@ class SolanaWalletAnalyzer:
                 
         except Exception as e:
             return {"error": f"Failed to fetch wallet data: {str(e)}"}
+    
+    async def get_zerion_portfolio(self, wallet_address: str) -> Dict[str, Any]:
+        """Fetch comprehensive portfolio data from Zerion API"""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                url = f"https://api.zerion.io/v1/wallets/{wallet_address}/portfolio?filter[positions]=only_simple&currency=usd"
+                headers = {
+                    "accept": "application/json",
+                    "authorization": f"Basic {self.zerion_api_key}"
+                }
+                
+                response = await client.get(url, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    attributes = data.get("data", {}).get("attributes", {})
+                    
+                    return {
+                        "total_value_usd": attributes.get("total", {}).get("positions", 0),
+                        "daily_change_usd": attributes.get("changes", {}).get("absolute_1d", 0),
+                        "daily_change_percent": attributes.get("changes", {}).get("percent_1d", 0),
+                        "distribution_by_type": attributes.get("positions_distribution_by_type", {}),
+                        "distribution_by_chain": attributes.get("positions_distribution_by_chain", {}),
+                        "source": "zerion"
+                    }
+                else:
+                    print(f"Zerion API error: {response.status_code}")
+                    return {"error": f"Zerion API error: {response.status_code}"}
+                    
+        except Exception as e:
+            print(f"Zerion API failed: {str(e)}")
+            return {"error": f"Failed to fetch Zerion data: {str(e)}"}
     
     async def get_token_prices(self, token_mints: List[str]) -> Dict[str, float]:
         """Fetch current token prices"""
@@ -233,7 +267,7 @@ class SolanaWalletAnalyzer:
             print(f"Market data fetch failed: {str(e)}")
             return {"sol_price_usd": 100, "price_change_7d": 0, "market_trend": "neutral"}
 
-    async def get_metta_recommendations(self, portfolio_data: Dict[str, Any]) -> List[str]:
+    async def get_metta_recommendations(self, portfolio_data: Dict[str, Any], zerion_data: Dict[str, Any] = None) -> List[str]:
         """Get investment recommendations from SingularityNET MeTTa knowledge base"""
         try:
             # Get market data for better analysis
@@ -245,8 +279,17 @@ class SolanaWalletAnalyzer:
             price_change_7d = market_data.get("price_change_7d", 0)
             market_trend = market_data.get("market_trend", "neutral")
             
-            # Calculate portfolio value
-            portfolio_value_usd = sol_balance * sol_price
+            # Use Zerion data if available, otherwise calculate from SOL balance
+            if zerion_data and "error" not in zerion_data:
+                portfolio_value_usd = zerion_data.get("total_value_usd", 0)
+                daily_change_usd = zerion_data.get("daily_change_usd", 0)
+                daily_change_percent = zerion_data.get("daily_change_percent", 0)
+                distribution = zerion_data.get("distribution_by_type", {})
+            else:
+                portfolio_value_usd = sol_balance * sol_price
+                daily_change_usd = 0
+                daily_change_percent = 0
+                distribution = {}
             
             # Analyze token holdings
             token_mints = []
@@ -263,16 +306,39 @@ class SolanaWalletAnalyzer:
             # Generate intelligent recommendations based on portfolio analysis
             recommendations = []
             
-            # SOL-specific recommendations based on balance and market conditions
-            if sol_balance > 0:
-                if sol_balance < 1:
-                    recommendations.append(f"Your wallet has {sol_balance:.4f} SOL (${portfolio_value_usd:.2f}). Consider accumulating more SOL before staking.")
-                elif sol_balance < 5:
-                    recommendations.append(f"With {sol_balance:.2f} SOL (${portfolio_value_usd:.2f}), consider staking 80% for passive income while keeping 20% liquid.")
-                elif sol_balance < 20:
-                    recommendations.append(f"Strong SOL position of {sol_balance:.2f} SOL (${portfolio_value_usd:.2f}). Diversify 30% into other tokens while staking 50%.")
+            # Portfolio value-based recommendations using Zerion data
+            if portfolio_value_usd > 0:
+                if portfolio_value_usd < 100:
+                    recommendations.append(f"Portfolio value: ${portfolio_value_usd:.2f}. Focus on learning and small, regular investments. Consider staking your SOL for passive income.")
+                elif portfolio_value_usd < 1000:
+                    recommendations.append(f"Growing portfolio: ${portfolio_value_usd:.2f}. Set up automated staking and consider dollar-cost averaging into promising tokens.")
+                elif portfolio_value_usd < 10000:
+                    recommendations.append(f"Strong portfolio: ${portfolio_value_usd:.2f}. Diversify across different asset types and consider DeFi strategies.")
                 else:
-                    recommendations.append(f"Large SOL holding of {sol_balance:.2f} SOL (${portfolio_value_usd:.2f}). Consider professional portfolio management strategies.")
+                    recommendations.append(f"Large portfolio: ${portfolio_value_usd:.2f}. Consider professional portfolio management and advanced DeFi strategies.")
+            
+            # Daily performance analysis using Zerion data
+            if daily_change_usd != 0:
+                if daily_change_percent > 5:
+                    recommendations.append(f"Portfolio up {daily_change_percent:.1f}% today (+${daily_change_usd:.2f}). Consider taking some profits or rebalancing.")
+                elif daily_change_percent < -5:
+                    recommendations.append(f"Portfolio down {abs(daily_change_percent):.1f}% today (-${abs(daily_change_usd):.2f}). This could be a buying opportunity for dollar-cost averaging.")
+            
+            # Asset distribution analysis using Zerion data
+            if distribution:
+                wallet_value = distribution.get("wallet", 0)
+                staked_value = distribution.get("staked", 0)
+                deposited_value = distribution.get("deposited", 0)
+                
+                if staked_value == 0 and wallet_value > 100:
+                    recommendations.append(f"You have ${wallet_value:.2f} in wallet but nothing staked. Consider staking 60-80% for passive income.")
+                elif staked_value > 0:
+                    staking_percentage = (staked_value / portfolio_value_usd) * 100
+                    if staking_percentage < 30:
+                        recommendations.append(f"Only {staking_percentage:.1f}% of your portfolio is staked. Consider increasing staking allocation for better returns.")
+                
+                if deposited_value > 0:
+                    recommendations.append("You have assets in DeFi protocols. Monitor yields and consider rebalancing if better opportunities arise.")
             
             # Market trend-based recommendations
             if market_trend == "bullish" and price_change_7d > 5:
@@ -354,8 +420,11 @@ class SolanaWalletAnalyzer:
         if "error" in wallet_data:
             return [{"type": "error", "message": wallet_data["error"]}]
         
-        # Get MeTTa recommendations
-        metta_recs = await self.get_metta_recommendations(wallet_data)
+        # Get Zerion portfolio data
+        zerion_data = await self.get_zerion_portfolio(wallet_address)
+        
+        # Get MeTTa recommendations with Zerion data
+        metta_recs = await self.get_metta_recommendations(wallet_data, zerion_data)
         
         # Get staking opportunities
         staking_ops = await self.get_staking_opportunities()
@@ -367,7 +436,12 @@ class SolanaWalletAnalyzer:
         # Get market data for better staking recommendations
         market_data = await self.get_market_data()
         sol_price = market_data.get("sol_price_usd", 100)
-        portfolio_value_usd = sol_balance * sol_price
+        
+        # Use Zerion portfolio value if available, otherwise calculate from SOL
+        if zerion_data and "error" not in zerion_data:
+            portfolio_value_usd = zerion_data.get("total_value_usd", 0)
+        else:
+            portfolio_value_usd = sol_balance * sol_price
         
         if sol_balance > 0.1:  # Lower threshold for staking
             # Dynamic staking recommendation based on portfolio size
@@ -431,16 +505,42 @@ def _text(msg: str) -> ChatMessage:
         content=[TextContent(type="text", text=msg)]
     )
 
-def _format_wallet_stats(wallet_data: Dict[str, Any]) -> str:
+def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any] = None) -> str:
     """Format wallet statistics for display"""
     sol_balance = wallet_data.get("sol_balance", 0)
     token_accounts = wallet_data.get("token_accounts", [])
     source = wallet_data.get("source", wallet_data.get("rpc_used", "Unknown"))
     
     formatted = "## 📊 Wallet Statistics\n\n"
+    
+    # Basic blockchain data
     formatted += f"**SOL Balance:** {sol_balance:.4f} SOL\n"
     formatted += f"**Token Holdings:** {len(token_accounts)} tokens\n"
     formatted += f"**Data Source:** {source}\n\n"
+    
+    # Enhanced Zerion data if available
+    if zerion_data and "error" not in zerion_data:
+        total_value = zerion_data.get("total_value_usd", 0)
+        daily_change_usd = zerion_data.get("daily_change_usd", 0)
+        daily_change_percent = zerion_data.get("daily_change_percent", 0)
+        distribution = zerion_data.get("distribution_by_type", {})
+        
+        formatted += "### 💰 Portfolio Value (Zerion Data)\n\n"
+        formatted += f"**Total Portfolio Value:** ${total_value:,.2f}\n"
+        
+        if daily_change_usd != 0:
+            change_emoji = "📈" if daily_change_usd > 0 else "📉"
+            formatted += f"**24h Change:** {change_emoji} ${daily_change_usd:,.2f} ({daily_change_percent:+.2f}%)\n"
+        
+        # Distribution breakdown
+        if distribution:
+            formatted += "\n### 📊 Asset Distribution\n\n"
+            for asset_type, value in distribution.items():
+                if value > 0:
+                    percentage = (value / total_value * 100) if total_value > 0 else 0
+                    formatted += f"**{asset_type.title()}:** ${value:,.2f} ({percentage:.1f}%)\n"
+        
+        formatted += "\n"
     
     if token_accounts:
         formatted += "### 🪙 Token Holdings\n\n"
@@ -538,38 +638,40 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                     # Get recommendations
                     recommendations = await analyzer.generate_recommendations(wallet_address)
                     
-                    if recommendations and not any(rec.get("type") == "error" for rec in recommendations):
-                        response_text = f"**Wallet Analysis Complete!**\n\n"
-                        response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
-                        
-                        # Get wallet data for statistics
-                        wallet_data = await analyzer.get_wallet_balance(wallet_address)
-                        if "error" not in wallet_data:
-                            response_text += _format_wallet_stats(wallet_data)
-                        
-                        response_text += _format_recommendations(recommendations)
-                        
-                        await ctx.send(sender, _text(response_text))
-                    else:
-                        error_msg = recommendations[0].get("message", "Analysis failed") if recommendations else "No recommendations available"
-                        await ctx.send(sender, _text(f"❌ **Analysis Failed**\n\n{error_msg}"))
-                else:
-                    await ctx.send(sender, _text(
-                        f"❌ **Invalid Wallet Address**\n\n"
-                        f"The address you provided doesn't appear to be a valid Solana wallet address.\n\n"
-                        f"Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
-                        f"**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
-                    ))
+            if recommendations and not any(rec.get("type") == "error" for rec in recommendations):
+                response_text = f"**Wallet Analysis Complete!**\n\n"
+                response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
+                
+                # Get wallet data and Zerion data for statistics
+                wallet_data = await analyzer.get_wallet_balance(wallet_address)
+                zerion_data = await analyzer.get_zerion_portfolio(wallet_address)
+                
+                if "error" not in wallet_data:
+                    response_text += _format_wallet_stats(wallet_data, zerion_data)
+                
+                response_text += _format_recommendations(recommendations)
+                
+                await ctx.send(sender, _text(response_text))
             else:
-                await ctx.send(sender, _text(
-                    "🤔 I need a Solana wallet address to analyze your portfolio.\n\n"
-                    "Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
-                    "You can find your wallet address in:\n"
-                    "• Phantom wallet\n"
-                    "• Solflare wallet\n"
-                    "• Any other Solana wallet\n\n"
-                    "**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
-                ))
+                error_msg = recommendations[0].get("message", "Analysis failed") if recommendations else "No recommendations available"
+                await ctx.send(sender, _text(f"❌ **Analysis Failed**\n\n{error_msg}"))
+        else:
+            await ctx.send(sender, _text(
+                f"❌ **Invalid Wallet Address**\n\n"
+                f"The address you provided doesn't appear to be a valid Solana wallet address.\n\n"
+                f"Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
+                f"**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
+            ))
+    else:
+        await ctx.send(sender, _text(
+            "🤔 I need a Solana wallet address to analyze your portfolio.\n\n"
+            "Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
+            "You can find your wallet address in:\n"
+            "• Phantom wallet\n"
+            "• Solflare wallet\n"
+            "• Any other Solana wallet\n\n"
+            "**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
+        ))
 
 @chat_proto.on_message(ChatAcknowledgement)
 async def on_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
