@@ -202,55 +202,148 @@ class SolanaWalletAnalyzer:
         except Exception as e:
             return [{"error": f"Failed to fetch staking data: {str(e)}"}]
     
+    async def get_market_data(self) -> Dict[str, Any]:
+        """Get current market data for better recommendations"""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                # Get SOL price
+                sol_response = await client.get("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd")
+                sol_data = sol_response.json()
+                sol_price = sol_data.get("solana", {}).get("usd", 0)
+                
+                # Get market trends
+                trends_response = await client.get("https://api.coingecko.com/api/v3/coins/solana/market_chart?vs_currency=usd&days=7")
+                trends_data = trends_response.json()
+                
+                # Calculate 7-day change
+                prices = trends_data.get("prices", [])
+                if len(prices) >= 2:
+                    old_price = prices[0][1]
+                    new_price = prices[-1][1]
+                    price_change_7d = ((new_price - old_price) / old_price) * 100
+                else:
+                    price_change_7d = 0
+                
+                return {
+                    "sol_price_usd": sol_price,
+                    "price_change_7d": price_change_7d,
+                    "market_trend": "bullish" if price_change_7d > 0 else "bearish"
+                }
+        except Exception as e:
+            print(f"Market data fetch failed: {str(e)}")
+            return {"sol_price_usd": 100, "price_change_7d": 0, "market_trend": "neutral"}
+
     async def get_metta_recommendations(self, portfolio_data: Dict[str, Any]) -> List[str]:
         """Get investment recommendations from SingularityNET MeTTa knowledge base"""
         try:
-            if not self.asi_api_key:
-                # Provide fallback recommendations when MeTTa is not available
-                sol_balance = portfolio_data.get("sol_balance", 0)
-                token_count = len(portfolio_data.get("token_accounts", []))
-                
-                fallback_recs = []
-                if sol_balance > 0:
-                    fallback_recs.append(f"Your wallet has {sol_balance:.2f} SOL. Consider staking for passive income.")
-                if token_count == 0:
-                    fallback_recs.append("Consider diversifying your portfolio with established tokens like USDC, USDT, or BONK.")
-                if sol_balance > 10:
-                    fallback_recs.append("With significant SOL holdings, consider dollar-cost averaging into other promising Solana tokens.")
-                
-                return fallback_recs if fallback_recs else ["Consider staking your SOL for passive income and diversifying your portfolio."]
+            # Get market data for better analysis
+            market_data = await self.get_market_data()
+            sol_balance = portfolio_data.get("sol_balance", 0)
+            token_accounts = portfolio_data.get("token_accounts", [])
+            token_count = len(token_accounts)
+            sol_price = market_data.get("sol_price_usd", 100)
+            price_change_7d = market_data.get("price_change_7d", 0)
+            market_trend = market_data.get("market_trend", "neutral")
             
-            # Prepare portfolio summary for MeTTa
-            portfolio_summary = {
-                "sol_balance": portfolio_data.get("sol_balance", 0),
-                "token_count": len(portfolio_data.get("token_accounts", [])),
-                "total_value_usd": 0  # Will be calculated with prices
-            }
+            # Calculate portfolio value
+            portfolio_value_usd = sol_balance * sol_price
             
-            # Query MeTTa for investment advice
-            async with httpx.AsyncClient(timeout=30) as client:
-                headers = {"Authorization": f"Bearer {self.asi_api_key}"}
-                response = await client.post(
-                    "https://api.singularitynet.io/v1/metta/query",
-                    headers=headers,
-                    json={
-                        "query": f"Analyze this Solana portfolio: {json.dumps(portfolio_summary)} and provide investment recommendations for optimal returns",
-                        "context": "cryptocurrency_investment_advice"
-                    }
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    return data.get("recommendations", ["No specific recommendations available from MeTTa"])
+            # Analyze token holdings
+            token_mints = []
+            for token_account in token_accounts:
+                try:
+                    parsed_data = token_account.get("account", {}).get("data", {}).get("parsed", {})
+                    info = parsed_data.get("info", {})
+                    mint = info.get("mint")
+                    if mint:
+                        token_mints.append(mint)
+                except:
+                    continue
+            
+            # Generate intelligent recommendations based on portfolio analysis
+            recommendations = []
+            
+            # SOL-specific recommendations based on balance and market conditions
+            if sol_balance > 0:
+                if sol_balance < 1:
+                    recommendations.append(f"Your wallet has {sol_balance:.4f} SOL (${portfolio_value_usd:.2f}). Consider accumulating more SOL before staking.")
+                elif sol_balance < 5:
+                    recommendations.append(f"With {sol_balance:.2f} SOL (${portfolio_value_usd:.2f}), consider staking 80% for passive income while keeping 20% liquid.")
+                elif sol_balance < 20:
+                    recommendations.append(f"Strong SOL position of {sol_balance:.2f} SOL (${portfolio_value_usd:.2f}). Diversify 30% into other tokens while staking 50%.")
                 else:
-                    # Fallback to basic recommendations
-                    sol_balance = portfolio_data.get("sol_balance", 0)
-                    return [f"MeTTa API unavailable. Consider staking your {sol_balance:.2f} SOL for passive income."]
+                    recommendations.append(f"Large SOL holding of {sol_balance:.2f} SOL (${portfolio_value_usd:.2f}). Consider professional portfolio management strategies.")
+            
+            # Market trend-based recommendations
+            if market_trend == "bullish" and price_change_7d > 5:
+                recommendations.append(f"SOL is up {price_change_7d:.1f}% this week. Consider taking some profits or rebalancing your portfolio.")
+            elif market_trend == "bearish" and price_change_7d < -5:
+                recommendations.append(f"SOL is down {abs(price_change_7d):.1f}% this week. This could be a good buying opportunity for dollar-cost averaging.")
+            
+            # Token diversification recommendations
+            if token_count == 0:
+                recommendations.append("No token holdings detected. Consider adding USDC for stability, BONK for memecoin exposure, or RAY for DeFi participation.")
+            elif token_count < 3:
+                recommendations.append(f"Limited diversification with only {token_count} tokens. Consider adding more tokens to spread risk across different sectors.")
+            elif token_count > 10:
+                recommendations.append(f"High diversification with {token_count} tokens. Consider consolidating into your top 5-7 strongest positions.")
+            
+            # Specific token recommendations based on holdings
+            if token_mints:
+                # Check for common tokens and provide specific advice
+                has_usdc = any("EPjFWdd5" in mint for mint in token_mints)
+                has_usdt = any("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" in mint for mint in token_mints)
+                has_bonks = any("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" in mint for mint in token_mints)
+                
+                if not has_usdc and not has_usdt:
+                    recommendations.append("Consider adding USDC or USDT for portfolio stability and easy trading opportunities.")
+                if not has_bonks:
+                    recommendations.append("BONK could provide memecoin exposure and potential high returns, but with higher risk.")
+            
+            # Risk assessment
+            if portfolio_value_usd < 100:
+                recommendations.append("Small portfolio size. Focus on learning and small, regular investments rather than complex strategies.")
+            elif portfolio_value_usd < 1000:
+                recommendations.append("Growing portfolio. Consider setting up automated staking and regular DCA (Dollar Cost Averaging).")
+            else:
+                recommendations.append("Significant portfolio value. Consider professional DeFi strategies like yield farming or liquidity provision.")
+            
+            # Try MeTTa API if available
+            if self.asi_api_key:
+                try:
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        headers = {"Authorization": f"Bearer {self.asi_api_key}"}
+                        portfolio_summary = {
+                            "sol_balance": sol_balance,
+                            "portfolio_value_usd": portfolio_value_usd,
+                            "token_count": token_count,
+                            "market_trend": market_trend,
+                            "price_change_7d": price_change_7d
+                        }
+                        
+                        response = await client.post(
+                            "https://api.singularitynet.io/v1/metta/query",
+                            headers=headers,
+                            json={
+                                "query": f"Analyze this Solana portfolio: {json.dumps(portfolio_summary)} and provide specific investment recommendations",
+                                "context": "cryptocurrency_investment_advice"
+                            }
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            metta_recs = data.get("recommendations", [])
+                            if metta_recs and len(metta_recs) > 0:
+                                recommendations.extend(metta_recs[:2])  # Add up to 2 MeTTa recommendations
+                except Exception as e:
+                    print(f"MeTTa API call failed: {str(e)}")
+            
+            return recommendations[:5]  # Limit to 5 recommendations
                     
         except Exception as e:
-            # Provide fallback recommendations on error
+            # Provide basic fallback recommendations on error
             sol_balance = portfolio_data.get("sol_balance", 0)
-            return [f"MeTTa integration error. Consider staking your {sol_balance:.2f} SOL for 6-8% APY."]
+            return [f"Portfolio analysis error. Consider staking your {sol_balance:.2f} SOL for 6-8% APY."]
     
     async def generate_recommendations(self, wallet_address: str) -> List[Dict[str, Any]]:
         """Generate comprehensive investment recommendations"""
@@ -269,18 +362,38 @@ class SolanaWalletAnalyzer:
         
         # Generate recommendations based on portfolio
         sol_balance = wallet_data.get("sol_balance", 0)
+        token_count = len(wallet_data.get("token_accounts", []))
         
-        if sol_balance > 1.0:  # If user has more than 1 SOL
-            # Staking recommendation
+        # Get market data for better staking recommendations
+        market_data = await self.get_market_data()
+        sol_price = market_data.get("sol_price_usd", 100)
+        portfolio_value_usd = sol_balance * sol_price
+        
+        if sol_balance > 0.1:  # Lower threshold for staking
+            # Dynamic staking recommendation based on portfolio size
             if staking_ops and not any("error" in op for op in staking_ops):
                 best_staking = max(staking_ops, key=lambda x: x.get("apy", 0))
+                
+                # Calculate optimal staking amount based on portfolio size
+                if sol_balance < 1:
+                    stake_amount = sol_balance * 0.5  # Stake 50% for small portfolios
+                    priority = "medium"
+                elif sol_balance < 5:
+                    stake_amount = sol_balance * 0.7  # Stake 70% for medium portfolios
+                    priority = "high"
+                else:
+                    stake_amount = sol_balance * 0.6  # Stake 60% for large portfolios
+                    priority = "high"
+                
+                estimated_return = stake_amount * best_staking['apy'] / 100
+                
                 recommendations.append({
                     "type": "staking",
-                    "priority": "high",
-                    "action": f"Stake {min(sol_balance * 0.8, 10)} SOL",
+                    "priority": priority,
+                    "action": f"Stake {stake_amount:.2f} SOL (${stake_amount * sol_price:.2f})",
                     "description": f"Stake with {best_staking['name']} for {best_staking['apy']:.2f}% APY",
-                    "reasoning": "High APY staking opportunity with reputable validator",
-                    "estimated_annual_return": f"${min(sol_balance * 0.8, 10) * best_staking['apy'] / 100:.2f}"
+                    "reasoning": f"Optimal staking strategy for your ${portfolio_value_usd:.2f} portfolio size",
+                    "estimated_annual_return": f"${estimated_return:.2f} (${estimated_return * sol_price:.2f} USD)"
                 })
         
         # Add MeTTa recommendations
