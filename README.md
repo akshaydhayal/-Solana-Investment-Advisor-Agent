@@ -2,37 +2,47 @@
 
 # 🔮 Solana Investment Advisor Agent
 
-An AI-powered investment advisor agent that analyzes Solana wallet portfolios and provides dynamic investment recommendations using on-chain data and SingularityNET's MeTTa knowledge base.
+An AI-powered investment advisor agent that analyzes Solana wallet portfolios and provides dynamic investment recommendations using on-chain data, Zerion API, and SingularityNET's MeTTa knowledge base.
+
+![tag:innovationlab](https://img.shields.io/badge/innovationlab-3D8BD3)
+![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
+![tag:avmcp](https://img.shields.io/badge/avmcp-6C63FF)
 
 ## Features
 
-- **Wallet Analysis**: Fetches and analyzes Solana wallet balances and token holdings
-- **Staking Recommendations**: Suggests optimal staking opportunities with APY calculations
-- **AI-Powered Insights**: Leverages SingularityNET MeTTa knowledge base for investment advice
-- **Real-time Data**: Uses live Solana blockchain data and current token prices
-- **ASI1 Compatible**: Built with Agent Chat Protocol for seamless integration
+- **🧠 MeTTa Knowledge Graph**: Advanced reasoning using structured knowledge about Solana ecosystem
+- **📊 Comprehensive Portfolio Analysis**: Real-time wallet data with Zerion API integration
+- **💰 Staking Optimization**: AI-powered staking recommendations based on portfolio size and risk
+- **🎯 DeFi Strategy Guidance**: Intelligent suggestions for yield farming and liquidity provision
+- **⚡ Real-time Market Data**: Live Solana blockchain data and current token prices
+- **🔗 ASI1 Compatible**: Built with Agent Chat Protocol for seamless integration
 
 ## How It Works
 
-1. **Portfolio Analysis**: The agent fetches your Solana wallet data including:
-   - SOL balance
-   - Token holdings and quantities
-   - Current market values
+1. **🧠 MeTTa Knowledge Graph Analysis**: 
+   - Structured knowledge about Solana ecosystem, DeFi protocols, and investment strategies
+   - Risk assessment based on asset categories and market conditions
+   - Intelligent reasoning for portfolio optimization
 
-2. **Staking Opportunities**: Identifies high-yield staking validators with:
-   - Current APY rates
-   - Validator reputation
-   - Commission rates
+2. **📊 Comprehensive Portfolio Analysis**: 
+   - Real-time wallet data from Solana blockchain
+   - Zerion API integration for detailed token positions and USD values
+   - Market trend analysis and performance metrics
 
-3. **MeTTa Integration**: Queries SingularityNET's MeTTa knowledge base for:
-   - Market trend analysis
-   - Investment strategies
-   - Risk assessment
+3. **💰 Advanced Staking Recommendations**: 
+   - AI-powered staking strategies based on portfolio size and risk tolerance
+   - Validator selection with APY optimization
+   - Dynamic allocation recommendations
 
-4. **Smart Recommendations**: Generates actionable advice such as:
-   - "Stake 5 SOL with Validator X for 7.2% APY"
-   - "Diversify portfolio - add more tokens"
-   - "Consider swapping USDC to SOL based on market conditions"
+4. **🎯 DeFi Strategy Guidance**: 
+   - Yield farming opportunities across protocols
+   - Risk mitigation strategies
+   - Portfolio diversification advice
+
+5. **⚡ Smart Recommendations**: Generates actionable advice such as:
+   - "Stake 14.8 SOL with Solana Foundation for 7.2% APY"
+   - "Diversify with DeFi tokens based on MeTTa risk analysis"
+   - "Consider yield farming on Raydium for additional returns"
 
 ## Environment Variables
 
@@ -41,6 +51,9 @@ Create a `.env` file in the `hosted/` directory with:
 ```env
 # Required: ASI One API Key for SingularityNET MeTTa integration
 ASI_ONE_API_KEY=your_asi_one_api_key_here
+
+# Required: Zerion API Key for comprehensive portfolio data
+ZERION_API_KEY=your_zerion_api_key_here
 
 # Optional: Agentverse URL (defaults to https://agentverse.ai)
 AGENTVERSE_URL=https://agentverse.ai

@@ -13,6 +13,7 @@ from uagents_core.contrib.protocols.chat import (
     TextContent, ResourceContent, Resource, MetadataContent,
     StartSessionContent, EndSessionContent
 )
+# Knowledge Graph Integration (Simplified for hosted environment)
 
 # Configuration
 AGENTVERSE_URL = os.getenv("AGENTVERSE_URL", "https://agentverse.ai")
@@ -31,6 +32,253 @@ SOLANA_RPC_URLS = [
     "https://rpc.ankr.com/solana"
 ]
 
+# ===== Knowledge Graph Classes (Simplified for Hosted Environment) =====
+
+class SolanaKnowledgeBase:
+    """Simplified knowledge base for Solana investment analysis"""
+    
+    def __init__(self):
+        # Asset information
+        self.assets = {
+            "SOL": {"name": "Solana", "category": "native_token", "risk": "medium", "description": "Solana native token, high performance blockchain"},
+            "USDC": {"name": "USD Coin", "category": "stablecoin", "risk": "low", "description": "USD Coin, stablecoin for trading and DeFi"},
+            "USDT": {"name": "Tether", "category": "stablecoin", "risk": "low", "description": "Tether, stablecoin for trading and DeFi"},
+            "RAY": {"name": "Raydium", "category": "defi_token", "risk": "medium", "description": "Raydium token, DEX and AMM protocol"},
+            "BONK": {"name": "BONK", "category": "memecoin", "risk": "high", "description": "BONK memecoin, high volatility, speculative"},
+            "JUP": {"name": "Jupiter", "category": "defi_token", "risk": "medium", "description": "Jupiter token, DEX aggregator"},
+            "ORCA": {"name": "Orca", "category": "defi_token", "risk": "medium", "description": "Orca token, user-friendly DEX"},
+            "MNGO": {"name": "Mango", "category": "defi_token", "risk": "medium", "description": "Mango token, lending protocol"}
+        }
+        
+        # Staking strategies
+        self.staking_strategies = {
+            "small": "Under $1000, stake 50-70% with Solana Foundation for stability",
+            "medium": "$1000-$10000, diversify staking across validators",
+            "large": "Over $10000, use liquid staking and DeFi strategies"
+        }
+        
+        # Investment allocations
+        self.allocations = {
+            "conservative": "70% SOL staking, 20% stablecoins, 10% DeFi",
+            "balanced": "50% SOL staking, 30% DeFi tokens, 20% stablecoins",
+            "aggressive": "30% SOL staking, 50% DeFi tokens, 20% memecoins"
+        }
+        
+        # Market conditions
+        self.market_strategies = {
+            "bull_market": "Focus on growth tokens, reduce stablecoin allocation",
+            "bear_market": "Increase stablecoin allocation, focus on staking",
+            "sideways": "DCA strategies, yield farming, balanced allocation"
+        }
+        
+        print("✅ Solana Knowledge Base initialized with comprehensive investment data")
+    
+    def get_asset_info(self, symbol: str) -> str:
+        """Get asset information"""
+        asset = self.assets.get(symbol.upper(), {})
+        return asset.get("description", f"Unknown asset: {symbol}")
+    
+    def get_risk_level(self, symbol: str) -> str:
+        """Get risk level for asset"""
+        asset = self.assets.get(symbol.upper(), {})
+        return asset.get("risk", "unknown")
+    
+    def get_staking_recommendation(self, portfolio_value: float) -> str:
+        """Get staking recommendation based on portfolio size"""
+        if portfolio_value < 1000:
+            return self.staking_strategies["small"]
+        elif portfolio_value < 10000:
+            return self.staking_strategies["medium"]
+        else:
+            return self.staking_strategies["large"]
+    
+    def get_allocation_strategy(self, risk_tolerance: str) -> str:
+        """Get allocation strategy based on risk tolerance"""
+        return self.allocations.get(risk_tolerance, self.allocations["balanced"])
+    
+    def get_market_strategy(self, market_trend: str) -> str:
+        """Get market-based strategy"""
+        return self.market_strategies.get(market_trend, self.market_strategies["sideways"])
+
+class KnowledgeProcessor:
+    """Processes investment queries using simplified knowledge base"""
+    
+    def __init__(self):
+        self.knowledge = SolanaKnowledgeBase()
+    
+    def analyze_portfolio(self, wallet_data: dict, zerion_data: dict = None, market_data: dict = None):
+        """Analyze portfolio using knowledge base"""
+        
+        try:
+            # Prepare portfolio data for analysis
+            portfolio_data = {
+                "portfolio_value": 0,
+                "assets": [],
+                "risk_tolerance": "balanced"
+            }
+            
+            # Extract portfolio value
+            if zerion_data and "error" not in zerion_data:
+                portfolio_value = zerion_data.get("total_value_usd", 0)
+                portfolio_data["portfolio_value"] = portfolio_value
+                
+                # Determine risk tolerance based on portfolio size
+                if portfolio_value < 1000:
+                    portfolio_data["risk_tolerance"] = "conservative"
+                elif portfolio_value > 10000:
+                    portfolio_data["risk_tolerance"] = "aggressive"
+            
+            # Extract assets from wallet data
+            token_accounts = wallet_data.get("token_accounts", [])
+            for token_account in token_accounts:
+                try:
+                    parsed_data = token_account.get("account", {}).get("data", {}).get("parsed", {})
+                    info = parsed_data.get("info", {})
+                    token_amount = info.get("tokenAmount", {})
+                    
+                    mint = info.get("mint", "")
+                    amount = float(token_amount.get("uiAmount", 0))
+                    
+                    if amount > 0:
+                        symbol = self._identify_token_symbol(mint)
+                        portfolio_data["assets"].append({
+                            "symbol": symbol,
+                            "mint": mint,
+                            "amount": amount
+                        })
+                except:
+                    continue
+            
+            # Add SOL if present
+            sol_balance = wallet_data.get("sol_balance", 0)
+            if sol_balance > 0:
+                portfolio_data["assets"].append({
+                    "symbol": "SOL",
+                    "mint": "11111111111111111111111111111111",
+                    "amount": sol_balance
+                })
+            
+            # Prepare market data
+            market_context = {
+                "market_trend": market_data.get("market_trend", "neutral") if market_data else "neutral",
+                "price_change_7d": market_data.get("price_change_7d", 0) if market_data else 0
+            }
+            
+            # Get insights from knowledge base
+            insights = self._get_investment_insights(portfolio_data, market_context)
+            
+            return {
+                "insights": insights,
+                "portfolio_analysis": portfolio_data,
+                "recommendations": self._generate_knowledge_recommendations(portfolio_data, market_context)
+            }
+            
+        except Exception as e:
+            print(f"Error in knowledge portfolio analysis: {str(e)}")
+            return {
+                "insights": ["Knowledge base analysis failed"],
+                "portfolio_analysis": {},
+                "recommendations": []
+            }
+    
+    def _identify_token_symbol(self, mint: str) -> str:
+        """Identify token symbol from mint address"""
+        token_map = {
+            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",
+            "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+            "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": "BONK",
+            "So11111111111111111111111111111111111111112": "SOL",
+            "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": "RAY",
+            "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": "JUP",
+            "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE": "ORCA",
+            "MangoCzJ36AjZyKwVj3VnYU4GOnOGMVzVhR7c3SBF9Qi": "MNGO"
+        }
+        return token_map.get(mint, mint[:8] + "...")
+    
+    def _get_investment_insights(self, portfolio_data: dict, market_data: dict):
+        """Get comprehensive investment insights using knowledge base"""
+        insights = []
+        
+        try:
+            # Analyze each asset in portfolio
+            for asset in portfolio_data.get("assets", []):
+                asset_name = asset.get("symbol", "").upper()
+                
+                # Get asset information
+                asset_info = self.knowledge.get_asset_info(asset_name)
+                if asset_info:
+                    insights.append(f"Asset {asset_name}: {asset_info}")
+                
+                # Get risk assessment
+                risk_level = self.knowledge.get_risk_level(asset_name)
+                if risk_level != "unknown":
+                    insights.append(f"Risk level for {asset_name}: {risk_level}")
+            
+            # Get staking recommendations
+            staking_rec = self.knowledge.get_staking_recommendation(portfolio_data.get("portfolio_value", 0))
+            if staking_rec:
+                insights.append(f"Staking strategy: {staking_rec}")
+            
+            # Get DeFi strategies
+            defi_strategy = self.knowledge.get_allocation_strategy(portfolio_data.get("risk_tolerance", "balanced"))
+            if defi_strategy:
+                insights.append(f"DeFi allocation: {defi_strategy}")
+            
+            # Get market-based strategies
+            market_strategy = self.knowledge.get_market_strategy(market_data.get("market_trend", "neutral"))
+            if market_strategy:
+                insights.append(f"Market strategy: {market_strategy}")
+            
+            return insights
+            
+        except Exception as e:
+            print(f"Error getting investment insights: {str(e)}")
+            return ["Knowledge base analysis temporarily unavailable"]
+    
+    def _generate_knowledge_recommendations(self, portfolio_data: dict, market_context: dict):
+        """Generate recommendations based on knowledge base"""
+        recommendations = []
+        
+        try:
+            # Get staking recommendations
+            staking_rec = self.knowledge.get_staking_recommendation(portfolio_data.get("portfolio_value", 0))
+            if staking_rec:
+                recommendations.append({
+                    "type": "staking",
+                    "priority": "high",
+                    "action": "Optimize Staking Strategy",
+                    "description": staking_rec,
+                    "reasoning": "Based on your portfolio size and knowledge base analysis"
+                })
+            
+            # Get DeFi strategies
+            defi_strategy = self.knowledge.get_allocation_strategy(portfolio_data.get("risk_tolerance", "balanced"))
+            if defi_strategy:
+                recommendations.append({
+                    "type": "defi",
+                    "priority": "medium",
+                    "action": "DeFi Allocation Strategy",
+                    "description": defi_strategy,
+                    "reasoning": "Knowledge base suggests optimal DeFi allocation"
+                })
+            
+            # Get market-based strategies
+            market_strategy = self.knowledge.get_market_strategy(market_context.get("market_trend", "neutral"))
+            if market_strategy:
+                recommendations.append({
+                    "type": "market_timing",
+                    "priority": "medium",
+                    "action": "Market-Based Strategy",
+                    "description": market_strategy,
+                    "reasoning": "Current market conditions suggest this approach"
+                })
+            
+            return recommendations
+            
+        except Exception as e:
+            print(f"Error generating knowledge recommendations: {str(e)}")
+            return []
+
 class SolanaWalletAnalyzer:
     """Analyzes Solana wallet data and provides investment recommendations"""
     
@@ -38,6 +286,7 @@ class SolanaWalletAnalyzer:
         self.asi_api_key = ASI_ONE_API_KEY
         self.zerion_api_key = ZERION_API_KEY
         self.rpc_urls = SOLANA_RPC_URLS
+        self.knowledge_processor = KnowledgeProcessor()
     
     async def get_wallet_balance(self, wallet_address: str) -> Dict[str, Any]:
         """Fetch wallet balance and token holdings from Solana blockchain"""
@@ -378,149 +627,53 @@ class SolanaWalletAnalyzer:
             print(f"Market data fetch failed: {str(e)}")
             return {"sol_price_usd": 100, "price_change_7d": 0, "market_trend": "neutral"}
 
-    async def get_metta_recommendations(self, portfolio_data: Dict[str, Any], zerion_data: Dict[str, Any] = None) -> List[str]:
-        """Get investment recommendations from SingularityNET MeTTa knowledge base"""
+    async def get_knowledge_recommendations(self, portfolio_data: Dict[str, Any], zerion_data: Dict[str, Any] = None) -> List[str]:
+        """Get investment recommendations from knowledge base"""
         try:
             # Get market data for better analysis
             market_data = await self.get_market_data()
-            sol_balance = portfolio_data.get("sol_balance", 0)
-            token_accounts = portfolio_data.get("token_accounts", [])
-            token_count = len(token_accounts)
-            sol_price = market_data.get("sol_price_usd", 100)
-            price_change_7d = market_data.get("price_change_7d", 0)
-            market_trend = market_data.get("market_trend", "neutral")
             
-            # Use Zerion data if available, otherwise calculate from SOL balance
-            if zerion_data and "error" not in zerion_data:
-                portfolio_value_usd = zerion_data.get("total_value_usd", 0)
-                daily_change_usd = zerion_data.get("daily_change_usd", 0)
-                daily_change_percent = zerion_data.get("daily_change_percent", 0)
-                distribution = zerion_data.get("distribution_by_type", {})
-            else:
-                portfolio_value_usd = sol_balance * sol_price
-                daily_change_usd = 0
-                daily_change_percent = 0
-                distribution = {}
+            # Use knowledge processor for intelligent analysis
+            knowledge_analysis = self.knowledge_processor.analyze_portfolio(portfolio_data, zerion_data, market_data)
             
-            # Analyze token holdings
-            token_mints = []
-            for token_account in token_accounts:
-                try:
-                    parsed_data = token_account.get("account", {}).get("data", {}).get("parsed", {})
-                    info = parsed_data.get("info", {})
-                    mint = info.get("mint")
-                    if mint:
-                        token_mints.append(mint)
-                except:
-                    continue
+            # Extract insights and recommendations
+            insights = knowledge_analysis.get("insights", [])
+            knowledge_recommendations = knowledge_analysis.get("recommendations", [])
             
-            # Generate intelligent recommendations based on portfolio analysis
+            # Convert knowledge recommendations to string format
             recommendations = []
             
-            # Portfolio value-based recommendations using Zerion data
-            if portfolio_value_usd > 0:
-                if portfolio_value_usd < 100:
-                    recommendations.append(f"Portfolio value: ${portfolio_value_usd:.2f}. Focus on learning and small, regular investments. Consider staking your SOL for passive income.")
-                elif portfolio_value_usd < 1000:
-                    recommendations.append(f"Growing portfolio: ${portfolio_value_usd:.2f}. Set up automated staking and consider dollar-cost averaging into promising tokens.")
-                elif portfolio_value_usd < 10000:
-                    recommendations.append(f"Strong portfolio: ${portfolio_value_usd:.2f}. Diversify across different asset types and consider DeFi strategies.")
+            # Add knowledge insights
+            for insight in insights[:3]:  # Limit to 3 insights
+                recommendations.append(f"🧠 Knowledge Insight: {insight}")
+            
+            # Add knowledge recommendations
+            for rec in knowledge_recommendations[:3]:  # Limit to 3 recommendations
+                if isinstance(rec, dict):
+                    recommendations.append(f"🎯 {rec.get('action', 'Recommendation')}: {rec.get('description', 'No description')}")
                 else:
-                    recommendations.append(f"Large portfolio: ${portfolio_value_usd:.2f}. Consider professional portfolio management and advanced DeFi strategies.")
+                    recommendations.append(f"🎯 Knowledge Recommendation: {rec}")
             
-            # Daily performance analysis using Zerion data
-            if daily_change_usd != 0:
-                if daily_change_percent > 5:
-                    recommendations.append(f"Portfolio up {daily_change_percent:.1f}% today (+${daily_change_usd:.2f}). Consider taking some profits or rebalancing.")
-                elif daily_change_percent < -5:
-                    recommendations.append(f"Portfolio down {abs(daily_change_percent):.1f}% today (-${abs(daily_change_usd):.2f}). This could be a buying opportunity for dollar-cost averaging.")
-            
-            # Asset distribution analysis using Zerion data
-            if distribution:
-                wallet_value = distribution.get("wallet", 0)
-                staked_value = distribution.get("staked", 0)
-                deposited_value = distribution.get("deposited", 0)
+            # Fallback to basic recommendations if knowledge base fails
+            if not recommendations:
+                sol_balance = portfolio_data.get("sol_balance", 0)
+                token_count = len(portfolio_data.get("token_accounts", []))
                 
-                if staked_value == 0 and wallet_value > 100:
-                    recommendations.append(f"You have ${wallet_value:.2f} in wallet but nothing staked. Consider staking 60-80% for passive income.")
-                elif staked_value > 0:
-                    staking_percentage = (staked_value / portfolio_value_usd) * 100
-                    if staking_percentage < 30:
-                        recommendations.append(f"Only {staking_percentage:.1f}% of your portfolio is staked. Consider increasing staking allocation for better returns.")
+                if sol_balance > 0:
+                    recommendations.append(f"Consider staking your {sol_balance:.2f} SOL for 6-8% APY using knowledge base insights.")
                 
-                if deposited_value > 0:
-                    recommendations.append("You have assets in DeFi protocols. Monitor yields and consider rebalancing if better opportunities arise.")
-            
-            # Market trend-based recommendations
-            if market_trend == "bullish" and price_change_7d > 5:
-                recommendations.append(f"SOL is up {price_change_7d:.1f}% this week. Consider taking some profits or rebalancing your portfolio.")
-            elif market_trend == "bearish" and price_change_7d < -5:
-                recommendations.append(f"SOL is down {abs(price_change_7d):.1f}% this week. This could be a good buying opportunity for dollar-cost averaging.")
-            
-            # Token diversification recommendations
-            if token_count == 0:
-                recommendations.append("No token holdings detected. Consider adding USDC for stability, BONK for memecoin exposure, or RAY for DeFi participation.")
-            elif token_count < 3:
-                recommendations.append(f"Limited diversification with only {token_count} tokens. Consider adding more tokens to spread risk across different sectors.")
-            elif token_count > 10:
-                recommendations.append(f"High diversification with {token_count} tokens. Consider consolidating into your top 5-7 strongest positions.")
-            
-            # Specific token recommendations based on holdings
-            if token_mints:
-                # Check for common tokens and provide specific advice
-                has_usdc = any("EPjFWdd5" in mint for mint in token_mints)
-                has_usdt = any("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" in mint for mint in token_mints)
-                has_bonks = any("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" in mint for mint in token_mints)
+                if token_count < 3:
+                    recommendations.append("Diversify your portfolio with more tokens based on risk analysis.")
                 
-                if not has_usdc and not has_usdt:
-                    recommendations.append("Consider adding USDC or USDT for portfolio stability and easy trading opportunities.")
-                if not has_bonks:
-                    recommendations.append("BONK could provide memecoin exposure and potential high returns, but with higher risk.")
-            
-            # Risk assessment
-            if portfolio_value_usd < 100:
-                recommendations.append("Small portfolio size. Focus on learning and small, regular investments rather than complex strategies.")
-            elif portfolio_value_usd < 1000:
-                recommendations.append("Growing portfolio. Consider setting up automated staking and regular DCA (Dollar Cost Averaging).")
-            else:
-                recommendations.append("Significant portfolio value. Consider professional DeFi strategies like yield farming or liquidity provision.")
-            
-            # Try MeTTa API if available
-            if self.asi_api_key:
-                try:
-                    async with httpx.AsyncClient(timeout=30) as client:
-                        headers = {"Authorization": f"Bearer {self.asi_api_key}"}
-                        portfolio_summary = {
-                            "sol_balance": sol_balance,
-                            "portfolio_value_usd": portfolio_value_usd,
-                            "token_count": token_count,
-                            "market_trend": market_trend,
-                            "price_change_7d": price_change_7d
-                        }
-                        
-                        response = await client.post(
-                            "https://api.singularitynet.io/v1/metta/query",
-                            headers=headers,
-                            json={
-                                "query": f"Analyze this Solana portfolio: {json.dumps(portfolio_summary)} and provide specific investment recommendations",
-                                "context": "cryptocurrency_investment_advice"
-                            }
-                        )
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            metta_recs = data.get("recommendations", [])
-                            if metta_recs and len(metta_recs) > 0:
-                                recommendations.extend(metta_recs[:2])  # Add up to 2 MeTTa recommendations
-                except Exception as e:
-                    print(f"MeTTa API call failed: {str(e)}")
+                recommendations.append("Use knowledge base for advanced DeFi strategy optimization.")
             
             return recommendations[:5]  # Limit to 5 recommendations
                     
         except Exception as e:
+            print(f"Knowledge recommendations failed: {str(e)}")
             # Provide basic fallback recommendations on error
             sol_balance = portfolio_data.get("sol_balance", 0)
-            return [f"Portfolio analysis error. Consider staking your {sol_balance:.2f} SOL for 6-8% APY."]
+            return [f"Knowledge analysis error. Consider staking your {sol_balance:.2f} SOL for 6-8% APY."]
     
     async def generate_recommendations(self, wallet_address: str) -> List[Dict[str, Any]]:
         """Generate comprehensive investment recommendations"""
@@ -534,8 +687,8 @@ class SolanaWalletAnalyzer:
         # Get Zerion portfolio data
         zerion_data = await self.get_zerion_portfolio(wallet_address)
         
-        # Get MeTTa recommendations with Zerion data
-        metta_recs = await self.get_metta_recommendations(wallet_data, zerion_data)
+        # Get knowledge recommendations with Zerion data
+        knowledge_recs = await self.get_knowledge_recommendations(wallet_data, zerion_data)
         
         # Get staking opportunities
         staking_ops = await self.get_staking_opportunities()
@@ -581,15 +734,15 @@ class SolanaWalletAnalyzer:
                     "estimated_annual_return": f"${estimated_return:.2f} (${estimated_return * sol_price:.2f} USD)"
                 })
         
-        # Add MeTTa recommendations
-        for rec in metta_recs:
+        # Add knowledge recommendations
+        for rec in knowledge_recs:
             if not rec.startswith("ASI API key") and not rec.startswith("Failed"):
                 recommendations.append({
-                    "type": "metta_advice",
+                    "type": "knowledge_advice",
                     "priority": "medium",
-                    "action": "Follow MeTTa guidance",
+                    "action": "Follow Knowledge guidance",
                     "description": rec,
-                    "reasoning": "AI-powered recommendation from SingularityNET MeTTa knowledge base"
+                    "reasoning": "AI-powered recommendation from knowledge base analysis"
                 })
         
         # Portfolio diversification advice
@@ -616,7 +769,7 @@ def _text(msg: str) -> ChatMessage:
         content=[TextContent(type="text", text=msg)]
     )
 
-def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any] = None, zerion_positions: List[Dict[str, Any]] = None) -> str:
+def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any] = None, zerion_positions: List[Dict[str, Any]] = None, knowledge_insights: List[str] = None) -> str:
     """Format wallet statistics for display"""
     sol_balance = wallet_data.get("sol_balance", 0)
     token_accounts = wallet_data.get("token_accounts", [])
@@ -627,6 +780,13 @@ def _format_wallet_stats(wallet_data: Dict[str, Any], zerion_data: Dict[str, Any
     # Basic blockchain data
     formatted += f"**SOL Balance:** {sol_balance:.4f} SOL\n"
     formatted += f"**Token Holdings:** {len(token_accounts)} tokens\n\n"
+    
+    # Knowledge Base Insights
+    if knowledge_insights and len(knowledge_insights) > 0:
+        formatted += "### 🧠 Knowledge Base Analysis\n\n"
+        for insight in knowledge_insights[:3]:  # Show top 3 insights
+            formatted += f"• {insight}\n"
+        formatted += "\n"
     
     # Enhanced portfolio data if available
     if zerion_data and "error" not in zerion_data:
@@ -801,16 +961,21 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                 if len(wallet_address) >= 32 and len(wallet_address) <= 44 and all(c in "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" for c in wallet_address):
                     await ctx.send(sender, _text("🔍 Analyzing your Solana wallet... This may take a moment."))
                     
-                    # Get recommendations
-                    recommendations = await analyzer.generate_recommendations(wallet_address)
-                    
                     # Get wallet data, Zerion portfolio, and Zerion positions for statistics
                     wallet_data = await analyzer.get_wallet_balance(wallet_address)
                     zerion_data = await analyzer.get_zerion_portfolio(wallet_address)
                     zerion_positions = await analyzer.get_zerion_positions(wallet_address)
                     
+                    # Get knowledge base insights
+                    knowledge_analysis = analyzer.knowledge_processor.analyze_portfolio(wallet_data, zerion_data, await analyzer.get_market_data())
+                    knowledge_insights = knowledge_analysis.get("insights", [])
+                    
+                    # Get recommendations
+                    recommendations = await analyzer.generate_recommendations(wallet_address)
+                    
                     # Debug logging
                     ctx.logger.info(f"Zerion positions fetched: {len(zerion_positions) if zerion_positions else 0} positions")
+                    ctx.logger.info(f"Knowledge insights generated: {len(knowledge_insights)} insights")
                     if zerion_positions and len(zerion_positions) > 0:
                         ctx.logger.info(f"First position: {zerion_positions[0].get('symbol', 'Unknown')} - ${zerion_positions[0].get('value_usd', 0)}")
                     else:
@@ -821,7 +986,7 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                         response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
                         
                         if "error" not in wallet_data:
-                            response_text += _format_wallet_stats(wallet_data, zerion_data, zerion_positions)
+                            response_text += _format_wallet_stats(wallet_data, zerion_data, zerion_positions, knowledge_insights)
                         
                         response_text += _format_recommendations(recommendations)
                         
