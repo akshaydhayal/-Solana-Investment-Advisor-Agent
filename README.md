@@ -8,6 +8,8 @@ An AI-powered investment advisor agent that analyzes Solana wallet portfolios an
 ![tag:hackathon](https://img.shields.io/badge/hackathon-5F43F1)
 ![tag:avmcp](https://img.shields.io/badge/avmcp-6C63FF)
 
+Agent Live Link: [https://agentverse.ai/agents/details/agent1qvvzrxauw9rl78hahqps5u73c6kuay8ujrps3qscpzdeg62034sx7plnqwy/profile](https://agentverse.ai/agents/details/agent1qvvzrxauw9rl78hahqps5u73c6kuay8ujrps3qscpzdeg62034sx7plnqwy/profile)
+
 ## Features
 
 - **🧠 MeTTa Knowledge Graph**: Advanced reasoning using structured knowledge about Solana ecosystem
@@ -16,6 +18,11 @@ An AI-powered investment advisor agent that analyzes Solana wallet portfolios an
 - **🎯 DeFi Strategy Guidance**: Intelligent suggestions for yield farming and liquidity provision
 - **⚡ Real-time Market Data**: Live Solana blockchain data and current token prices
 - **🔗 ASI1 Compatible**: Built with Agent Chat Protocol for seamless integration
+
+## 📸 Demo
+
+### Agent Chat Demo
+![Agent Chat Demo Page](https://github.com/akshaydhayal/-Solana-Investment-Advisor-Agent/blob/main/demo.png)
 
 ## How It Works
 
