@@ -76,24 +76,65 @@ AGENTVERSE_URL=https://agentverse.ai
 ### Example Interaction
 
 ```
-User: 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM
+Analyse this Solana wallet : 7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk
 
-Agent: 🔍 Analyzing your Solana wallet... This may take a moment.
+Wallet Analysis Complete!
+Wallet: 7pQHLgaT...YLHsSXtk
 
-Agent: ## 💡 Investment Recommendations
+📊 Wallet Statistics
+SOL Balance: 24.5325 SOL Token Holdings: 6 tokens
 
-### 🔴 1. Stake 8.0 SOL
-**Description:** Stake with Solana Beach Validator for 7.2% APY
-**Reasoning:** High APY staking opportunity with reputable validator
-**Estimated Annual Return:** $0.58
+🧠 Knowledge Base Analysis
+• Asset AOXJNBWF...: Unknown asset: AOXJNBWF... • Asset BFK9UJLD...: Unknown asset: BFK9UJLD... • Asset HCGJUKRA...: Unknown asset: HCGJUKRA...
 
-### 🟡 2. Follow MeTTa guidance
-**Description:** Current market conditions favor SOL accumulation
-**Reasoning:** AI-powered recommendation from SingularityNET MeTTa knowledge base
+💰 Portfolio Value
+Total Portfolio Value: 3,920.77∗∗24hChange:∗∗📈3,920.77∗∗24hChange:∗∗📈25.44 (+0.65%)
 
-### 🟡 3. Diversify portfolio
-**Description:** Consider adding more tokens to diversify risk
-**Reasoning:** Current portfolio has only 2 tokens. Diversification reduces risk.
+📊 Asset Distribution
+Wallet: $3,920.77 (100.0%)
+
+🪙 Token Holdings
+1. SOL ✓ - Solana 💰 You own 24.531609 SOL which is worth **3,920.90∗
+∗📊Pricepertoken:3,920.90∗∗📊Pricepertoken:159.830675 📈 24h change: +0.69%
+
+2. USDC ✓ - USD Coin 💰 You own 1.001 USDC which is worth **1.00∗∗
+📊Pricepertoken:1.00∗∗📊Pricepertoken:0.999255 📉 24h change: -0.10%
+
+3. AAA - Artalicjaanton 💰 You own 10.00K AAA which is worth **0.18∗∗
+📊Pricepertoken:0.18∗∗📊Pricepertoken:0.000018 📈 24h change: +1.63%
+
+4. PTC - PitCoin 💰 You own 100 PTC which is worth **0.00∗∗
+📊Pricepertoken:0.00∗∗📊Pricepertoken:0.000043 📈 24h change: +2.87%
+
+5. RS - Ceylon 💰 You own 5 RS which is worth **0.00∗∗
+📊Pricepertoken:0.00∗∗📊Pricepertoken:0.000001 📉 24h change: -0.97%
+
+💡 Investment Recommendations
+
+🔴 1. Stake 14.72 SOL ($2352.77)
+Description: Stake with Solana Foundation for 7.20% APY
+Reasoning: Optimal staking strategy for your $3920.77 portfolio size
+Estimated Annual Return: 1.06(1.06(169.40 USD)
+
+🟡 2. Follow Knowledge guidance
+Description: 🧠 Knowledge Insight: Asset AOXJNBWF...: Unknown asset: AOXJNBWF...
+Reasoning: AI-powered recommendation from knowledge base analysis
+
+🟡 3. Follow Knowledge guidance
+Description: 🧠 Knowledge Insight: Asset BFK9UJLD...: Unknown asset: BFK9UJLD...
+Reasoning: AI-powered recommendation from knowledge base analysis
+
+🟡 4. Follow Knowledge guidance
+Description: 🧠 Knowledge Insight: Asset HCGJUKRA...: Unknown asset: HCGJUKRA...
+Reasoning: AI-powered recommendation from knowledge base analysis
+
+🟡 5. Follow Knowledge guidance
+Description: 🎯 Optimize Staking Strategy: 1000−1000−10000, diversify staking across validators
+Reasoning: AI-powered recommendation from knowledge base analysis
+
+🟡 6. Follow Knowledge guidance
+Description: 🎯 DeFi Allocation Strategy: 50% SOL staking, 30% DeFi tokens, 20% stablecoins
+Reasoning: AI-powered recommendation from knowledge base analysis
 ```
 
 ## Supported Operations
