@@ -675,31 +675,52 @@ class SolanaWalletAnalyzer:
             sol_balance = portfolio_data.get("sol_balance", 0)
             return [f"Knowledge analysis error. Consider staking your {sol_balance:.2f} SOL for 6-8% APY."]
     
-    async def generate_recommendations(self, wallet_address: str) -> List[Dict[str, Any]]:
+    async def generate_recommendations(self, wallet_address: str, wallet_data: Dict[str, Any] = None, zerion_data: Dict[str, Any] = None, market_data: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Generate comprehensive investment recommendations"""
         recommendations = []
         
-        # Get wallet data
-        wallet_data = await self.get_wallet_balance(wallet_address)
-        if "error" in wallet_data:
-            return [{"type": "error", "message": wallet_data["error"]}]
+        # Get wallet data if not provided
+        if wallet_data is None:
+            wallet_data = await self.get_wallet_balance(wallet_address)
+            if "error" in wallet_data:
+                return [{"type": "error", "message": wallet_data["error"]}]
         
-        # Get Zerion portfolio data
-        zerion_data = await self.get_zerion_portfolio(wallet_address)
+        # Get Zerion portfolio data if not provided
+        if zerion_data is None:
+            zerion_data = await self.get_zerion_portfolio(wallet_address)
+        
+        # Get market data if not provided
+        if market_data is None:
+            market_data = await self.get_market_data()
         
         # Get knowledge recommendations with Zerion data
-        knowledge_recs = await self.get_knowledge_recommendations(wallet_data, zerion_data)
+        try:
+            knowledge_recs = await self.get_knowledge_recommendations(wallet_data, zerion_data)
+        except Exception as e:
+            print(f"Error getting knowledge recommendations: {str(e)}")
+            knowledge_recs = []
         
-        # Get staking opportunities
-        staking_ops = await self.get_staking_opportunities()
+        # Get staking opportunities with error handling
+        try:
+            staking_ops = await asyncio.wait_for(self.get_staking_opportunities(), timeout=10.0)
+        except (asyncio.TimeoutError, Exception) as e:
+            print(f"Error getting staking opportunities: {str(e)}")
+            # Use default staking opportunities
+            staking_ops = [
+                {
+                    "name": "Solana Foundation",
+                    "apy": 7.2,
+                    "commission": 0.0,
+                    "vote_account": "Vote1111111111111111111111111111111111111112",
+                    "description": "Stake with Solana Foundation for 7.20% APY"
+                }
+            ]
         
         # Generate recommendations based on portfolio
         sol_balance = wallet_data.get("sol_balance", 0)
         token_count = len(wallet_data.get("token_accounts", []))
         
-        # Get market data for better staking recommendations
-        market_data = await self.get_market_data()
-        sol_price = market_data.get("sol_price_usd", 100)
+        sol_price = market_data.get("sol_price_usd", 100) if market_data else 100
         
         # Use Zerion portfolio value if available, otherwise calculate from SOL
         if zerion_data and "error" not in zerion_data:
@@ -939,76 +960,124 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
             user_input = content.text.strip()
             ctx.logger.info(f"User input: {user_input}")
             
-            # Extract wallet address from text using regex
-            import re
-            wallet_pattern = r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
-            wallet_matches = re.findall(wallet_pattern, user_input)
-            
-            wallet_address = None
-            if wallet_matches:
-                # Use the first valid-looking wallet address found
-                for match in wallet_matches:
-                    if 32 <= len(match) <= 44:
-                        wallet_address = match
-                        break
-            
-            # If no wallet found in text, check if entire input is a wallet address
-            if not wallet_address and len(user_input) >= 32 and len(user_input) <= 44:
-                wallet_address = user_input
-            
-            if wallet_address:
-                # Basic validation - check if it looks like a Solana address
-                if len(wallet_address) >= 32 and len(wallet_address) <= 44 and all(c in "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" for c in wallet_address):
-                    await ctx.send(sender, _text("🔍 Analyzing your Solana wallet... This may take a moment."))
-                    
-                    # Get wallet data, Zerion portfolio, and Zerion positions for statistics
-                    wallet_data = await analyzer.get_wallet_balance(wallet_address)
-                    zerion_data = await analyzer.get_zerion_portfolio(wallet_address)
-                    zerion_positions = await analyzer.get_zerion_positions(wallet_address)
-                    
-                    # Get knowledge base insights
-                    knowledge_analysis = analyzer.knowledge_processor.analyze_portfolio(wallet_data, zerion_data, await analyzer.get_market_data())
-                    knowledge_insights = knowledge_analysis.get("insights", [])
-                    
-                    # Get recommendations
-                    recommendations = await analyzer.generate_recommendations(wallet_address)
-                    
-                    # Debug logging
-                    ctx.logger.info(f"Zerion positions fetched: {len(zerion_positions) if zerion_positions else 0} positions")
-                    ctx.logger.info(f"Knowledge insights generated: {len(knowledge_insights)} insights")
-                    if zerion_positions and len(zerion_positions) > 0:
-                        ctx.logger.info(f"First position: {zerion_positions[0].get('symbol', 'Unknown')} - ${zerion_positions[0].get('value_usd', 0)}")
+            try:
+                # Extract wallet address from text using regex
+                import re
+                wallet_pattern = r'\b[1-9A-HJ-NP-Za-km-z]{32,44}\b'
+                wallet_matches = re.findall(wallet_pattern, user_input)
+                
+                wallet_address = None
+                if wallet_matches:
+                    # Use the first valid-looking wallet address found
+                    for match in wallet_matches:
+                        if 32 <= len(match) <= 44:
+                            wallet_address = match
+                            break
+                
+                # If no wallet found in text, check if entire input is a wallet address
+                if not wallet_address and len(user_input) >= 32 and len(user_input) <= 44:
+                    wallet_address = user_input
+                
+                if wallet_address:
+                    # Basic validation - check if it looks like a Solana address
+                    if len(wallet_address) >= 32 and len(wallet_address) <= 44 and all(c in "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" for c in wallet_address):
+                        await ctx.send(sender, _text("🔍 Analyzing your Solana wallet... This may take a moment."))
+                        
+                        try:
+                            # Get wallet data, Zerion portfolio, and Zerion positions for statistics
+                            # Use asyncio.wait_for to add timeout protection
+                            wallet_data = await asyncio.wait_for(
+                                analyzer.get_wallet_balance(wallet_address),
+                                timeout=20.0
+                            )
+                            zerion_data = await asyncio.wait_for(
+                                analyzer.get_zerion_portfolio(wallet_address),
+                                timeout=15.0
+                            )
+                            zerion_positions = await asyncio.wait_for(
+                                analyzer.get_zerion_positions(wallet_address),
+                                timeout=15.0
+                            )
+                            
+                            # Get market data with timeout
+                            market_data = await asyncio.wait_for(
+                                analyzer.get_market_data(),
+                                timeout=10.0
+                            )
+                            
+                            # Get knowledge base insights (synchronous, should be fast)
+                            knowledge_analysis = analyzer.knowledge_processor.analyze_portfolio(
+                                wallet_data, zerion_data, market_data
+                            )
+                            knowledge_insights = knowledge_analysis.get("insights", [])
+                            
+                            # Get recommendations with timeout (pass already-fetched data to avoid duplicate calls)
+                            recommendations = await asyncio.wait_for(
+                                analyzer.generate_recommendations(wallet_address, wallet_data, zerion_data, market_data),
+                                timeout=20.0
+                            )
+                            
+                            # Debug logging
+                            ctx.logger.info(f"Zerion positions fetched: {len(zerion_positions) if zerion_positions else 0} positions")
+                            ctx.logger.info(f"Knowledge insights generated: {len(knowledge_insights)} insights")
+                            if zerion_positions and len(zerion_positions) > 0:
+                                ctx.logger.info(f"First position: {zerion_positions[0].get('symbol', 'Unknown')} - ${zerion_positions[0].get('value_usd', 0)}")
+                            else:
+                                ctx.logger.warning("Zerion positions is empty or None - will fallback to basic token data")
+                            
+                            if recommendations and not any(rec.get("type") == "error" for rec in recommendations):
+                                response_text = f"**Wallet Analysis Complete!**\n\n"
+                                response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
+                                
+                                if "error" not in wallet_data:
+                                    response_text += _format_wallet_stats(wallet_data, zerion_data, zerion_positions, knowledge_insights)
+                                
+                                response_text += _format_recommendations(recommendations)
+                                
+                                await ctx.send(sender, _text(response_text))
+                            else:
+                                error_msg = recommendations[0].get("message", "Analysis failed") if recommendations else "No recommendations available"
+                                await ctx.send(sender, _text(f"❌ **Analysis Failed**\n\n{error_msg}"))
+                                
+                        except asyncio.TimeoutError:
+                            ctx.logger.error("Timeout while fetching wallet data")
+                            await ctx.send(sender, _text(
+                                "⏱️ **Request Timeout**\n\n"
+                                "The analysis is taking longer than expected. Please try again in a moment.\n\n"
+                                "This might be due to:\n"
+                                "• High network traffic\n"
+                                "• Solana RPC delays\n"
+                                "• External API slowdowns"
+                            ))
+                        except Exception as e:
+                            ctx.logger.error(f"Error processing wallet analysis: {str(e)}")
+                            await ctx.send(sender, _text(
+                                f"❌ **Analysis Error**\n\n"
+                                f"An error occurred while analyzing your wallet. Please try again.\n\n"
+                                f"Error: {str(e)[:100]}"
+                            ))
                     else:
-                        ctx.logger.warning("Zerion positions is empty or None - will fallback to basic token data")
-                    
-                    if recommendations and not any(rec.get("type") == "error" for rec in recommendations):
-                        response_text = f"**Wallet Analysis Complete!**\n\n"
-                        response_text += f"**Wallet:** `{wallet_address[:8]}...{wallet_address[-8:]}`\n\n"
-                        
-                        if "error" not in wallet_data:
-                            response_text += _format_wallet_stats(wallet_data, zerion_data, zerion_positions, knowledge_insights)
-                        
-                        response_text += _format_recommendations(recommendations)
-                        
-                        await ctx.send(sender, _text(response_text))
-                    else:
-                        error_msg = recommendations[0].get("message", "Analysis failed") if recommendations else "No recommendations available"
-                        await ctx.send(sender, _text(f"❌ **Analysis Failed**\n\n{error_msg}"))
+                        await ctx.send(sender, _text(
+                            f"❌ **Invalid Wallet Address**\n\n"
+                            f"The address you provided doesn't appear to be a valid Solana wallet address.\n\n"
+                            f"Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
+                            f"**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
+                        ))
                 else:
                     await ctx.send(sender, _text(
-                        f"❌ **Invalid Wallet Address**\n\n"
-                        f"The address you provided doesn't appear to be a valid Solana wallet address.\n\n"
-                        f"Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
-                        f"**Example:** `7pQHLgaTrP25TjmSaoGvTJJKeS2ZyGT2xAAvYLHsSXtk`"
+                        "🤔 I need a Solana wallet address to analyze your portfolio.\n\n"
+                        "Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
+                        "You can find your wallet address in:\n"
+                        "• Phantom wallet\n"
+                        "• Solflare wallet\n"
+                        "• Any other Solana wallet"
                     ))
-            else:
+            except Exception as e:
+                ctx.logger.error(f"Unexpected error in chat handler: {str(e)}")
                 await ctx.send(sender, _text(
-                    "🤔 I need a Solana wallet address to analyze your portfolio.\n\n"
-                    "Please provide a valid Solana wallet address (32-44 characters, base58 encoded).\n\n"
-                    "You can find your wallet address in:\n"
-                    "• Phantom wallet\n"
-                    "• Solflare wallet\n"
-                    "• Any other Solana wallet"
+                    "❌ **Unexpected Error**\n\n"
+                    "An unexpected error occurred. Please try again or contact support.\n\n"
+                    f"Error: {str(e)[:100]}"
                 ))
 
 @chat_proto.on_message(ChatAcknowledgement)

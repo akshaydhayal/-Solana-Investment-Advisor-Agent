@@ -302,3 +302,4 @@ def get_investment_insights(metta: MeTTa, portfolio_data: dict, market_data: dic
         return ["Knowledge graph analysis temporarily unavailable"]
 
 
+
